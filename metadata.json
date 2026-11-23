@@ -1,0 +1,6 @@
+{
+  "name": "تیکت‌شمار انبار",
+  "description": "اپلیکیشن فارسی و راست‌چین برای ثبت عکس تیکت‌های شمارش پالت‌ها و کارتن‌های انبار در پوشه‌بندی واقعی روی حافظه گوشی همراه با عکاسی سریع پشت‌سرهم و واترمارک شمسی",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

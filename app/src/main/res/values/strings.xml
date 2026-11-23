@@ -1,0 +1,101 @@
+<resources>
+    <string name="app_name">تیکت‌شمار انبار</string>
+    <string name="app_subtitle">مدیریت و ثبت پوشه‌بندی‌شده عکس تیکت‌های شمارش</string>
+
+    <!-- Actions -->
+    <string name="action_add">افزودن</string>
+    <string name="action_save">ذخیره</string>
+    <string name="action_cancel">انصراف</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_edit">ویرایش</string>
+    <string name="action_back">بازگشت</string>
+    <string name="action_done">اتمام</string>
+    <string name="action_camera_rapid">عکاسی پشت‌سرهم</string>
+    <string name="action_pick_gallery">انتخاب از گالری</string>
+    <string name="action_toggle_theme">تغییر حالت روشن و تیره</string>
+    <string name="action_search_warehouses">جست‌وجوی انبار…</string>
+    <string name="action_search_rows">جست‌وجوی ردیف…</string>
+    <string name="action_search_pallets">جست‌وجوی پالت…</string>
+
+    <!-- Levels -->
+    <string name="warehouses_title">انبارها</string>
+    <string name="add_warehouse">انبار جدید</string>
+    <string name="edit_warehouse">ویرایش نام انبار</string>
+    <string name="warehouse_name_label">نام یا کد انبار</string>
+    <string name="warehouse_name_placeholder">مثلاً: انبار مرکزی یا سالن ۱</string>
+
+    <string name="rows_title">ردیف‌های انبار</string>
+    <string name="add_row">ردیف جدید</string>
+    <string name="edit_row">ویرایش نام ردیف</string>
+    <string name="row_name_label">نام یا شماره ردیف</string>
+    <string name="row_name_placeholder">مثلاً: ردیف ۱ یا ردیف A</string>
+
+    <string name="pallets_title">پالت‌های ردیف</string>
+    <string name="add_pallet">پالت جدید</string>
+    <string name="edit_pallet">ویرایش اطلاعات پالت</string>
+    <string name="pallet_name_label">نام یا شماره پالت</string>
+    <string name="pallet_name_placeholder">مثلاً: پالت ۰۱</string>
+
+    <string name="cartons_title">کارتن‌های روی پالت</string>
+    <string name="add_carton">کارتن جدید</string>
+    <string name="edit_carton">ویرایش اطلاعات کارتن</string>
+    <string name="carton_name_label">نام یا شماره کارتن</string>
+    <string name="carton_name_placeholder">مثلاً: کارتن ۱</string>
+
+    <!-- Counts -->
+    <string name="carton_count_label">تعداد کارتن</string>
+    <string name="item_count_label">تعداد اقلام شمارش‌شده</string>
+    <string name="pallet_tickets_tab">تیکت‌های پالت</string>
+    <string name="pallet_cartons_tab">کارتن‌های روی پالت</string>
+    <string name="carton_tickets_section">عکس تیکت‌های این کارتن</string>
+
+    <!-- Folder path & Storage -->
+    <string name="storage_folder_path_label">مسیر پوشه روی حافظه گوشی</string>
+    <string name="watermark_enabled">واترمارک فعال</string>
+    <string name="watermark_disabled">واترمارک غیرفعال</string>
+    <string name="flash_toggle">تغییر وضعیت فلاش</string>
+
+    <!-- Empty states -->
+    <string name="empty_warehouses_title">هنوز انباری ثبت نشده است</string>
+    <string name="empty_warehouses_desc">اولین انبار را بسازید تا ردیف‌ها، پالت‌ها و عکس تیکت‌ها به صورت خودکار در پوشه‌های مجزا ذخیره شوند.</string>
+    <string name="empty_rows_title">ردیفی در این انبار ثبت نشده است</string>
+    <string name="empty_rows_desc">ردیف‌های چیدمان این انبار را اضافه کنید تا پالت‌های هر ردیف تفکیک شوند.</string>
+    <string name="empty_pallets_title">پالتی در این ردیف ثبت نشده است</string>
+    <string name="empty_pallets_desc">پالت جدید اضافه کنید، تعداد کارتن و اقلام آن را ثبت کنید و از تیکت آن عکس بگیرید.</string>
+    <string name="empty_pallet_tickets_title">عکس تیکتی برای این پالت ثبت نشده است</string>
+    <string name="empty_pallet_tickets_desc">با دوربین سریع پشت‌سرهم عکس بگیرید یا از گالری انتخاب کنید؛ عکس‌ها با واترمارک در پوشه تیکت پالت ذخیره می‌شوند.</string>
+    <string name="empty_cartons_title">کارتنی روی این پالت ثبت نشده است</string>
+    <string name="empty_cartons_desc">برای تفکیک تیکت هر کارتن در پوشه جداگانه، کارتن‌های روی این پالت را اضافه کنید.</string>
+    <string name="empty_carton_tickets_title">عکس تیکتی برای این کارتن ثبت نشده است</string>
+    <string name="empty_carton_tickets_desc">با دوربین پشت‌سرهم یا انتخاب از گالری عکس تیکت این کارتن را در پوشه اختصاصی آن ذخیره کنید.</string>
+
+    <!-- Camera & Permissions -->
+    <string name="camera_permission_title">نیاز به دسترسی دوربین</string>
+    <string name="camera_permission_desc">برای عکاسی مستقیم و پشت‌سرهم از تیکت‌های شمارش، لطفاً مجوز دسترسی به دوربین را تأیید کنید.</string>
+    <string name="camera_permission_grant">تأیید دسترسی دوربین</string>
+    <string name="camera_capture_cd">گرفتن عکس تیکت</string>
+    <string name="camera_session_saved">عکس ذخیره شد</string>
+    <string name="camera_saving">در حال ذخیره با واترمارک…</string>
+
+    <!-- Confirmations & Validation -->
+    <string name="error_empty_name">لطفاً نام را وارد کنید.</string>
+    <string name="error_duplicate_name">این نام در همین سطح قبلاً ثبت شده است.</string>
+    <string name="delete_confirm_title">تأیید حذف</string>
+    <string name="delete_warehouse_message">با حذف این انبار، تمام ردیف‌ها، پالت‌ها، کارتن‌ها و عکس تیکت‌های ثبت‌شده آن نیز حذف می‌شوند. ادامه می‌دهید؟</string>
+    <string name="delete_row_message">با حذف این ردیف، تمام پالت‌ها، کارتن‌ها و عکس تیکت‌های این ردیف نیز حذف می‌شوند. ادامه می‌دهید؟</string>
+    <string name="delete_pallet_message">با حذف این پالت، تمام کارتن‌ها و عکس تیکت‌های مربوط به آن حذف می‌شوند. ادامه می‌دهید؟</string>
+    <string name="delete_carton_message">با حذف این کارتن، تمام عکس تیکت‌های ثبت‌شده برای آن حذف می‌شوند. ادامه می‌دهید؟</string>
+    <string name="delete_photo_message">آیا از حذف این عکس تیکت از پوشه حافظه گوشی مطمئن هستید؟</string>
+
+    <!-- Warehouse Map -->
+    <string name="warehouse_map_title">نقشه سوله انبار</string>
+    <string name="warehouse_map_isometric">نقشه ایزومتریک (۳D)</string>
+    <string name="warehouse_map_top_down">نمای از بالا (۲D)</string>
+    <string name="warehouse_map_entrance">درب ورودی / بارگیری سوله</string>
+
+    <!-- Cloud Backup -->
+    <string name="cloud_backup_title">پشتیبان‌گیری ابری</string>
+    <string name="cloud_backup_subtitle">ابر آروان و فضای ابری سازگار با S3</string>
+    <string name="cloud_backup_now">پشتیبان‌گیری فوری</string>
+    <string name="cloud_restore_now">بازیابی کامل از ابر</string>
+</resources>
