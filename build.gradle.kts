@@ -6,3 +6,14 @@ plugins {
   alias(libs.plugins.secrets) apply false
   alias(libs.plugins.google.services) apply false
 }
+android {
+    ...
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            universalApk true // برای تولید یک نسخه تکی سازگار با همه پردازنده‌ها
+        }
+    }
+}
