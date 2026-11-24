@@ -1,7 +1,12 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,17 +26,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warehouse
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
@@ -49,6 +58,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -70,6 +80,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +88,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.example.data.backup.LocalBackupPreviewInfo
+import com.example.data.backup.LocalRestoreConflictMode
+import com.example.data.backup.LocalZipTransferProgress
 import com.example.data.cloud.CloudStorageConfig
 import com.example.data.cloud.CloudTransferProgress
 import com.example.data.local.BackupIntervalOption
@@ -96,11 +110,19 @@ fun CloudBackupScreen(
     globalStats: GlobalStats,
     syncedPhotoCount: Int,
     transferProgress: CloudTransferProgress,
+    localZipProgress: LocalZipTransferProgress,
+    pendingRestorePreview: LocalBackupPreviewInfo?,
     isTestingConnection: Boolean,
     isDarkTheme: Boolean,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
     onToggleTheme: () -> Unit,
+    onSuggestedBackupFileName: () -> String,
+    onExportLocalBackupZip: (Uri) -> Unit,
+    onShareLocalBackupZip: ((Uri, String) -> Unit) -> Unit,
+    onPickLocalBackupForRestore: (Uri) -> Unit,
+    onDismissLocalRestorePreview: () -> Unit,
+    onConfirmLocalRestore: (LocalRestoreConflictMode) -> Unit,
     onSetAutoBackupEnabled: (Boolean) -> Unit,
     onSetWifiOnly: (Boolean) -> Unit,
     onSetInterval: (BackupIntervalOption) -> Unit,
@@ -108,10 +130,27 @@ fun CloudBackupScreen(
     onTestConnection: () -> Unit,
     onRestoreFromCloud: () -> Unit,
 ) {
-    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var showCloudRestoreConfirmDialog by remember { mutableStateOf(false) }
 
     val pendingPhotoCount = (globalStats.totalPhotos - syncedPhotoCount).coerceAtLeast(0)
-    val isBusy = transferProgress.isRunning || isTestingConnection
+    val isBusy = transferProgress.isRunning || localZipProgress.isRunning || isTestingConnection
+
+    val createBackupDocLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
+    ) { targetUri: Uri? ->
+        if (targetUri != null) {
+            onExportLocalBackupZip(targetUri)
+        }
+    }
+
+    val openBackupDocLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { sourceUri: Uri? ->
+        if (sourceUri != null) {
+            onPickLocalBackupForRestore(sourceUri)
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -121,12 +160,12 @@ fun CloudBackupScreen(
                 title = {
                     Column {
                         Text(
-                            text = "پشتیبان‌گیری ابری",
+                            text = "مدیریت بکاپ‌ها و بازیابی",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            text = "ابر آروان و فضای ابری سازگار با S3",
+                            text = "بکاپ کامل فایلی (ZIP با عکس‌ها) + فضای ابری آروان",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -170,6 +209,38 @@ fun CloudBackupScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                item(key = "local_zip_backup_card") {
+                    LocalZipBackupManagementCard(
+                        globalStats = globalStats,
+                        localZipProgress = localZipProgress,
+                        isBusy = isBusy,
+                        onCreateNewBackup = {
+                            createBackupDocLauncher.launch(onSuggestedBackupFileName())
+                        },
+                        onPickBackupFromStorage = {
+                            openBackupDocLauncher.launch(
+                                arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream", "*/*"),
+                            )
+                        },
+                        onShareBackup = {
+                            onShareLocalBackupZip { shareUri, fileName ->
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/zip"
+                                    putExtra(Intent.EXTRA_STREAM, shareUri)
+                                    putExtra(Intent.EXTRA_SUBJECT, "فایل پشتیبان تیکت‌شمار انبار ($fileName)")
+                                    putExtra(
+                                        Intent.EXTRA_TEXT,
+                                        "فایل پشتیبان کامل تیکت‌شمار انبار شامل پایگاه داده و تمام تصاویر تیکت‌ها ($fileName)",
+                                    )
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                val chooser = Intent.createChooser(sendIntent, "اشتراک‌گذاری فایل پشتیبان بکاپ")
+                                context.startActivity(chooser)
+                            }
+                        },
+                    )
+                }
+
                 item(key = "cloud_hero") {
                     CloudStatusHeroCard(
                         config = config,
@@ -213,16 +284,24 @@ fun CloudBackupScreen(
                         isTestingConnection = isTestingConnection,
                         onBackupNow = onBackupNow,
                         onTestConnection = onTestConnection,
-                        onRequestRestore = { showRestoreConfirmDialog = true },
+                        onRequestRestore = { showCloudRestoreConfirmDialog = true },
                     )
                 }
             }
         }
     }
 
-    if (showRestoreConfirmDialog) {
+    pendingRestorePreview?.let { preview ->
+        LocalBackupRestoreModeDialog(
+            preview = preview,
+            onDismiss = onDismissLocalRestorePreview,
+            onConfirm = onConfirmLocalRestore,
+        )
+    }
+
+    if (showCloudRestoreConfirmDialog) {
         AlertDialog(
-            onDismissRequest = { showRestoreConfirmDialog = false },
+            onDismissRequest = { showCloudRestoreConfirmDialog = false },
             title = {
                 Text(
                     text = "بازیابی کامل از فضای ابری",
@@ -239,7 +318,7 @@ fun CloudBackupScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        showRestoreConfirmDialog = false
+                        showCloudRestoreConfirmDialog = false
                         onRestoreFromCloud()
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -253,7 +332,7 @@ fun CloudBackupScreen(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { showRestoreConfirmDialog = false },
+                    onClick = { showCloudRestoreConfirmDialog = false },
                     modifier = Modifier.testTag("cancel_cloud_restore_button"),
                 ) {
                     Text("انصراف")
@@ -261,6 +340,329 @@ fun CloudBackupScreen(
             },
         )
     }
+}
+
+@Composable
+private fun LocalZipBackupManagementCard(
+    globalStats: GlobalStats,
+    localZipProgress: LocalZipTransferProgress,
+    isBusy: Boolean,
+    onCreateNewBackup: () -> Unit,
+    onPickBackupFromStorage: () -> Unit,
+    onShareBackup: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("local_zip_backup_card"),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.size(46.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Filled.Archive,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "بکاپ کامل فایلی همراه با عکس‌ها (ZIP)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "ذخیره کل دیتابیس و پوشه عکس‌های تیکت (${globalStats.totalPhotos.toPersianNumber()} عکس در ${globalStats.warehouseCount.toPersianNumber()} انبار) در یک فایل ZIP",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (localZipProgress.isRunning) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = localZipProgress.statusText.ifBlank { "در حال پردازش فایل بکاپ…" },
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        if (localZipProgress.totalSteps > 0) {
+                            val fraction = (localZipProgress.currentStep.toFloat() / localZipProgress.totalSteps.toFloat())
+                                .coerceIn(0f, 1f)
+                            LinearProgressIndicator(
+                                progress = { fraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 1. گرفتن بکاپ جدید (Save in user-chosen folder via SAF)
+            Button(
+                onClick = onCreateNewBackup,
+                enabled = !isBusy,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                ),
+                contentPadding = PaddingValues(vertical = 13.dp, horizontal = 14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("local_backup_create_button"),
+            ) {
+                Icon(Icons.Filled.SaveAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "گرفتن بکاپ جدید (ذخیره در پوشه دلخواه گوشی)",
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // 2. انتخاب فایل از حافظه (Pick ZIP from device storage for restore)
+                FilledTonalButton(
+                    onClick = onPickBackupFromStorage,
+                    enabled = !isBusy,
+                    contentPadding = PaddingValues(vertical = 12.dp, horizontal = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("local_backup_restore_pick_button"),
+                ) {
+                    Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "انتخاب فایل از حافظه",
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                // 3. اشتراک‌گذاری (Direct share of ZIP backup with other apps)
+                OutlinedButton(
+                    onClick = onShareBackup,
+                    enabled = !isBusy,
+                    contentPadding = PaddingValues(vertical = 12.dp, horizontal = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("local_backup_share_button"),
+                ) {
+                    Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "اشتراک‌گذاری",
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocalBackupRestoreModeDialog(
+    preview: LocalBackupPreviewInfo,
+    onDismiss: () -> Unit,
+    onConfirm: (LocalRestoreConflictMode) -> Unit,
+) {
+    var selectedMode by remember { mutableStateOf(LocalRestoreConflictMode.MERGE) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "بازیابی فایل بکاپ (ادغام یا جایگزینی)",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "مشخصات فایل بکاپ انتخاب‌شده:",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "تاریخ ساخت: ${preview.createdAtJalali}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = "${preview.warehouseCount.toPersianNumber()} انبار • ${preview.rowCount.toPersianNumber()} ردیف • ${preview.palletCount.toPersianNumber()} پالت • ${preview.cartonCount.toPersianNumber()} کارتن",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "${preview.ticketCount.toPersianNumber()} رکورد تیکت و ${preview.imageEntryCount.toPersianNumber()} فایل تصویر داخل ZIP",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                    }
+                }
+
+                Text(
+                    text = "با اطلاعات و عکس‌های فعلی داخل برنامه چه رفتاری انجام شود؟",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+
+                LocalRestoreConflictMode.entries.forEach { mode ->
+                    val isSelected = selectedMode == mode
+                    val tag = if (mode == LocalRestoreConflictMode.MERGE) {
+                        "restore_mode_merge_option"
+                    } else {
+                        "restore_mode_replace_option"
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerLow
+                        },
+                        border = BorderStroke(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.secondary
+                            } else {
+                                MaterialTheme.colorScheme.outlineVariant
+                            },
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { selectedMode = mode }
+                            .testTag(tag),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { selectedMode = mode },
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = mode.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = mode.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(selectedMode) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (selectedMode == LocalRestoreConflictMode.REPLACE) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.secondary
+                    },
+                    contentColor = if (selectedMode == LocalRestoreConflictMode.REPLACE) {
+                        MaterialTheme.colorScheme.onError
+                    } else {
+                        MaterialTheme.colorScheme.onSecondary
+                    },
+                ),
+                modifier = Modifier.testTag("confirm_local_restore_button"),
+            ) {
+                Text(
+                    text = if (selectedMode == LocalRestoreConflictMode.MERGE) {
+                        "ادغام اطلاعات و عکس‌ها"
+                    } else {
+                        "جایگزینی کامل اطلاعات"
+                    },
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("cancel_local_restore_button"),
+            ) {
+                Text("انصراف")
+            }
+        },
+    )
 }
 
 @Composable
@@ -295,15 +697,15 @@ private fun CloudStatusHeroCard(
 
     val statusHeadline = when {
         transferProgress.isRunning -> transferProgress.statusText.ifBlank { "در حال همگام‌سازی ابری…" }
-        !config.isConfigured -> "نیاز به تنظیم کلیدهای فضای ابری"
-        backupPrefs.lastBackupStatus == LastBackupStatus.ERROR -> "خطا در آخرین همگام‌سازی"
+        !config.isConfigured -> "پشتیبان‌گیری ابری (نیاز به تنظیم کلیدها)"
+        backupPrefs.lastBackupStatus == LastBackupStatus.ERROR -> "خطا در آخرین همگام‌سازی ابری"
         pendingPhotoCount == 0 && backupPrefs.lastBackupAtMillis > 0L -> "تمام داده‌ها و تصاویر در ابر ایمن هستند"
-        pendingPhotoCount > 0 -> "${pendingPhotoCount.toPersianNumber()} تصویر در انتظار پشتیبان‌گیری"
+        pendingPhotoCount > 0 -> "${pendingPhotoCount.toPersianNumber()} تصویر در انتظار پشتیبان‌گیری ابری"
         else -> "آماده برای اولین پشتیبان‌گیری ابری"
     }
 
     val lastTimeLabel = if (backupPrefs.lastBackupAtMillis > 0L) {
-        "آخرین پشتیبان موفق: ${PersianUtils.formatJalaliDateTime(backupPrefs.lastBackupAtMillis)}"
+        "آخرین پشتیبان ابری موفق: ${PersianUtils.formatJalaliDateTime(backupPrefs.lastBackupAtMillis)}"
     } else {
         "هنوز نسخه پشتیبانی در فضای ابری ثبت نشده است"
     }
@@ -398,7 +800,6 @@ private fun CloudStatusHeroCard(
                 }
             }
 
-            // Read-only server & bucket display (never displays secret keys)
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = Color(0x18FFFFFF),
@@ -616,7 +1017,7 @@ private fun AutoBackupSettingsCard(
                     modifier = Modifier.size(20.dp),
                 )
                 Text(
-                    text = "تنظیمات پشتیبان‌گیری خودکار",
+                    text = "تنظیمات پشتیبان‌گیری خودکار ابری",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -746,7 +1147,7 @@ private fun CloudActionsCard(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = "عملیات پشتیبان‌گیری و بازیابی",
+                text = "عملیات پشتیبان‌گیری و بازیابی ابری (ابر آروان / S3)",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -756,8 +1157,8 @@ private fun CloudActionsCard(
                 onClick = onBackupNow,
                 enabled = !isBusy,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
                 contentPadding = PaddingValues(vertical = 13.dp),
                 modifier = Modifier
@@ -767,7 +1168,7 @@ private fun CloudActionsCard(
                 Icon(Icons.Filled.CloudUpload, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "پشتیبان‌گیری فوری (تصاویر + دیتابیس)",
+                    text = "پشتیبان‌گیری فوری در ابر (تصاویر + دیتابیس)",
                     fontWeight = FontWeight.Bold,
                 )
             }

@@ -6,6 +6,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.OperationResult
 import com.example.data.WarehouseRepository
+import com.example.data.backup.LocalBackupPreviewInfo
+import com.example.data.backup.LocalBackupZipManager
+import com.example.data.backup.LocalRestoreConflictMode
+import com.example.data.backup.LocalZipTransferProgress
 import com.example.data.cloud.CloudBackupManager
 import com.example.data.cloud.CloudBackupScheduler
 import com.example.data.cloud.CloudResult
@@ -71,6 +75,14 @@ class AnbarViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private val localBackupZipManager: LocalBackupZipManager by lazy {
+        LocalBackupZipManager(
+            context = application,
+            database = database,
+            folderManager = imageStorage.folderManager,
+        )
+    }
+
     val cloudStorageConfig: CloudStorageConfig
         get() = cloudBackupManager.config
 
@@ -103,6 +115,12 @@ class AnbarViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isTestingCloudConnection = MutableStateFlow(false)
     val isTestingCloudConnection: StateFlow<Boolean> = _isTestingCloudConnection.asStateFlow()
+
+    private val _localZipProgress = MutableStateFlow(LocalZipTransferProgress())
+    val localZipProgress: StateFlow<LocalZipTransferProgress> = _localZipProgress.asStateFlow()
+
+    private val _pendingRestorePreview = MutableStateFlow<LocalBackupPreviewInfo?>(null)
+    val pendingRestorePreview: StateFlow<LocalBackupPreviewInfo?> = _pendingRestorePreview.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -608,6 +626,121 @@ class AnbarViewModel(application: Application) : AndroidViewModel(application) {
                     wifiOnly = prefs.wifiOnly,
                 )
             }
+        }
+    }
+
+    // --- Full Local ZIP Backup & Restore (with Photos) ---
+    fun suggestedBackupFileName(): String = localBackupZipManager.buildSuggestedBackupFileName()
+
+    fun exportLocalBackupZip(targetUri: Uri) {
+        if (_localZipProgress.value.isRunning || _cloudTransferProgress.value.isRunning) return
+        viewModelScope.launch {
+            _localZipProgress.value = LocalZipTransferProgress(
+                isRunning = true,
+                isRestore = false,
+                statusText = "در حال ساخت فایل پشتیبان کامل (ZIP)…",
+            )
+            when (
+                val res = localBackupZipManager.exportBackupToUri(targetUri) { progress ->
+                    _localZipProgress.value = progress
+                }
+            ) {
+                is OperationResult.Success -> {
+                    val info = res.data
+                    _snackbarMessages.tryEmit(
+                        "بکاپ کامل با موفقیت ذخیره شد (${info.exportedWarehouses.toPersianNumber()} انبار و ${info.exportedImages.toPersianNumber()} عکس).",
+                    )
+                }
+                is OperationResult.Error -> {
+                    _snackbarMessages.tryEmit(res.message)
+                }
+            }
+            _localZipProgress.value = LocalZipTransferProgress()
+        }
+    }
+
+    fun shareLocalBackupZip(onReadyToShare: (Uri, String) -> Unit) {
+        if (_localZipProgress.value.isRunning || _cloudTransferProgress.value.isRunning) return
+        viewModelScope.launch {
+            _localZipProgress.value = LocalZipTransferProgress(
+                isRunning = true,
+                isRestore = false,
+                statusText = "در حال آماده‌سازی فایل بکاپ برای اشتراک‌گذاری…",
+            )
+            when (
+                val res = localBackupZipManager.prepareShareableBackupZip { progress ->
+                    _localZipProgress.value = progress
+                }
+            ) {
+                is OperationResult.Success -> {
+                    val (shareUri, summary) = res.data
+                    _localZipProgress.value = LocalZipTransferProgress()
+                    onReadyToShare(shareUri, summary.fileName)
+                }
+                is OperationResult.Error -> {
+                    _localZipProgress.value = LocalZipTransferProgress()
+                    _snackbarMessages.tryEmit(res.message)
+                }
+            }
+        }
+    }
+
+    fun onBackupFilePickedForRestore(sourceUri: Uri) {
+        if (_localZipProgress.value.isRunning || _cloudTransferProgress.value.isRunning) return
+        viewModelScope.launch {
+            _localZipProgress.value = LocalZipTransferProgress(
+                isRunning = true,
+                isRestore = true,
+                statusText = "در حال بررسی محتویات فایل بکاپ انتخاب‌شده…",
+            )
+            when (val res = localBackupZipManager.inspectBackupZip(sourceUri)) {
+                is OperationResult.Success -> {
+                    _pendingRestorePreview.value = res.data
+                }
+                is OperationResult.Error -> {
+                    _snackbarMessages.tryEmit(res.message)
+                }
+            }
+            _localZipProgress.value = LocalZipTransferProgress()
+        }
+    }
+
+    fun dismissRestorePreview() {
+        _pendingRestorePreview.value = null
+    }
+
+    fun confirmLocalRestore(mode: LocalRestoreConflictMode) {
+        val preview = _pendingRestorePreview.value ?: return
+        if (_localZipProgress.value.isRunning || _cloudTransferProgress.value.isRunning) return
+        _pendingRestorePreview.value = null
+        viewModelScope.launch {
+            _localZipProgress.value = LocalZipTransferProgress(
+                isRunning = true,
+                isRestore = true,
+                statusText = "در حال بازیابی اطلاعات و عکس‌ها از فایل بکاپ…",
+            )
+            when (
+                val res = localBackupZipManager.restoreFromBackupZip(
+                    sourceUri = preview.sourceUri,
+                    mode = mode,
+                    onProgress = { progress ->
+                        _localZipProgress.value = progress
+                    },
+                )
+            ) {
+                is OperationResult.Success -> {
+                    val info = res.data
+                    val modeText = if (info.mode == LocalRestoreConflictMode.MERGE) "ادغام" else "جایگزینی"
+                    _snackbarMessages.tryEmit(
+                        "بازیابی ($modeText) انجام شد: ${info.restoredWarehouses.toPersianNumber()} انبار و ${info.restoredImages.toPersianNumber()} عکس بازیابی شدند.",
+                    )
+                    scheduleDebouncedAutoBackupIfEnabled()
+                }
+                is OperationResult.Error -> {
+                    _snackbarMessages.tryEmit(res.message)
+                }
+            }
+            _localZipProgress.value = LocalZipTransferProgress()
         }
     }
 }

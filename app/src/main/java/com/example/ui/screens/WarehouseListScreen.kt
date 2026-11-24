@@ -206,12 +206,12 @@ fun WarehouseListScreen(
                 item(key = "cloud_backup_status_banner") {
                     val pendingCount = (globalStats.totalPhotos - syncedPhotoCount).coerceAtLeast(0)
                     val bannerSubtitle = when {
-                        isCloudSyncRunning -> "در حال همگام‌سازی خودکار با فضای ابری…"
-                        !isCloudConfigured -> "تنظیم اتصال ابر آروان (S3) برای حفاظت از تصاویر و داده‌ها"
-                        cloudBackupPrefs.lastBackupStatus == LastBackupStatus.ERROR -> "خطا در آخرین پشتیبان‌گیری — برای بررسی لمس کنید"
-                        pendingCount > 0 -> "${pendingCount.toPersianNumber()} تصویر در انتظار ارسال به فضای ابری"
-                        cloudBackupPrefs.lastBackupAtMillis > 0L -> "آخرین پشتیبان: ${PersianUtils.formatJalaliDateTime(cloudBackupPrefs.lastBackupAtMillis)}"
-                        else -> "پشتیبان‌گیری خودکار ابری آماده اجرا است"
+                        isCloudSyncRunning -> "در حال پردازش بکاپ یا همگام‌سازی…"
+                        !isCloudConfigured -> "گرفتن بکاپ جدید (ZIP با عکس‌ها)، بازیابی از حافظه، اشتراک‌گذاری و ابر آروان"
+                        cloudBackupPrefs.lastBackupStatus == LastBackupStatus.ERROR -> "خطا در آخرین پشتیبان‌گیری ابری — برای مدیریت بکاپ‌ها لمس کنید"
+                        pendingCount > 0 -> "بکاپ فایلی ZIP + ${pendingCount.toPersianNumber()} تصویر در انتظار ارسال به ابر"
+                        cloudBackupPrefs.lastBackupAtMillis > 0L -> "آخرین پشتیبان ابری: ${PersianUtils.formatJalaliDateTime(cloudBackupPrefs.lastBackupAtMillis)}"
+                        else -> "گرفتن بکاپ فایلی ZIP همراه با عکس‌ها، بازیابی و پشتیبان‌گیری ابری"
                     }
                     Card(
                         modifier = Modifier
@@ -260,7 +260,7 @@ fun WarehouseListScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "پشتیبان‌گیری ابری (ابر آروان / S3)",
+                                    text = "مدیریت بکاپ‌ها و بازیابی (فایلی ZIP + ابری)",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -277,7 +277,7 @@ fun WarehouseListScreen(
                             }
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                contentDescription = "باز کردن تنظیمات پشتیبان‌گیری ابری",
+                                contentDescription = "باز کردن صفحه مدیریت بکاپ‌ها",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }

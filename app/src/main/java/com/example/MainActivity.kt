@@ -115,6 +115,8 @@ private fun AnbarTicketNavApp(
     val cloudBackupPrefs by viewModel.cloudBackupPreferences.collectAsStateWithLifecycle()
     val syncedPhotoCount by viewModel.syncedPhotoCount.collectAsStateWithLifecycle()
     val cloudTransferProgress by viewModel.cloudTransferProgress.collectAsStateWithLifecycle()
+    val localZipProgress by viewModel.localZipProgress.collectAsStateWithLifecycle()
+    val pendingRestorePreview by viewModel.pendingRestorePreview.collectAsStateWithLifecycle()
     val isTestingCloudConnection by viewModel.isTestingCloudConnection.collectAsStateWithLifecycle()
     val isImportingGallery by viewModel.isImportingGallery.collectAsStateWithLifecycle()
     val cameraSession by viewModel.cameraSession.collectAsStateWithLifecycle()
@@ -152,7 +154,7 @@ private fun AnbarTicketNavApp(
                 isCloudConfigured = viewModel.cloudStorageConfig.isConfigured,
                 cloudBackupPrefs = cloudBackupPrefs,
                 syncedPhotoCount = syncedPhotoCount,
-                isCloudSyncRunning = cloudTransferProgress.isRunning,
+                isCloudSyncRunning = cloudTransferProgress.isRunning || localZipProgress.isRunning,
                 isDarkTheme = isDarkTheme,
                 snackbarHostState = snackbarHostState,
                 onToggleTheme = viewModel::toggleTheme,
@@ -174,11 +176,19 @@ private fun AnbarTicketNavApp(
                 globalStats = globalStats,
                 syncedPhotoCount = syncedPhotoCount,
                 transferProgress = cloudTransferProgress,
+                localZipProgress = localZipProgress,
+                pendingRestorePreview = pendingRestorePreview,
                 isTestingConnection = isTestingCloudConnection,
                 isDarkTheme = isDarkTheme,
                 snackbarHostState = snackbarHostState,
                 onBack = { navController.popBackStack() },
                 onToggleTheme = viewModel::toggleTheme,
+                onSuggestedBackupFileName = viewModel::suggestedBackupFileName,
+                onExportLocalBackupZip = viewModel::exportLocalBackupZip,
+                onShareLocalBackupZip = viewModel::shareLocalBackupZip,
+                onPickLocalBackupForRestore = viewModel::onBackupFilePickedForRestore,
+                onDismissLocalRestorePreview = viewModel::dismissRestorePreview,
+                onConfirmLocalRestore = viewModel::confirmLocalRestore,
                 onSetAutoBackupEnabled = viewModel::setAutoBackupEnabled,
                 onSetWifiOnly = viewModel::setBackupWifiOnly,
                 onSetInterval = viewModel::setBackupInterval,
